@@ -1,6 +1,6 @@
-package com.url.shotener.service;
+package com.url.shortener.service;
 
-import com.url.shotener.model.User;
+import com.url.shortener.models.User;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
@@ -55,5 +55,25 @@ public class UserDetailsImpl implements UserDetails {
     @Override
     public String getUsername() {
         return username;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true; // 账号未过期
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true; // 账号未锁定
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true; // 凭证未过期
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true; // 账号已启用
     }
 }

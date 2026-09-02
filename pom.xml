@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.url</groupId>
-	<artifactId>usl-shortener-sb</artifactId>
+	<artifactId>url-shortener-sb</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name/>
 	<description/>

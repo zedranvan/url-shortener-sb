@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Docker volume data ###
+compose/*_data/
+compose/mariadb_data/
+compose/redis_data/
+

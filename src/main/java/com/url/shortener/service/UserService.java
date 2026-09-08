@@ -23,6 +23,12 @@ public class UserService {
     private JwtUtils jwtUtils;
 
     public User registerUser(User user){
+        if (userRepository.existsByUsername(user.getUsername())) {
+            throw new IllegalArgumentException("用户名已存在，请更换其他用户名");
+        }
+        if (userRepository.existsByEmail(user.getEmail())) {
+            throw new IllegalArgumentException("该邮箱已被注册，请更换其他邮箱");
+        }
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }

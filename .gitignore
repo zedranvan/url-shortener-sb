@@ -37,3 +37,8 @@ compose/*_data/
 compose/mariadb_data/
 compose/redis_data/
 
+### Frontend ###
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+

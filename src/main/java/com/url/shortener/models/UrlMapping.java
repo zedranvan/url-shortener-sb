@@ -1,10 +1,7 @@
 package com.url.shortener.models;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,6 +10,8 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @ToString(exclude = {"clickEvents", "user"}) // 排除双向关联字段，防止死循环
 @Table(
         name = "url_mapping",
@@ -34,6 +33,7 @@ public class UrlMapping {
     // 移除 @Column 上的 unique = true，由 @Table 中的 @Index 统一维护
     @Column(name = "short_url", nullable = false, length = 16)
     private String shortUrl;
+
 
     @Column(name = "click_count", nullable = false)
     private int clickCount = 0;

@@ -1,0 +1,371 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+% --- 宏包引入 ---
+\usepackage{geometry}
+\geometry{left=2cm,right=2cm,top=2.5cm,bottom=2.5cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+
+% --- 颜色定义 ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.97,0.98}
+\definecolor{boxborder}{rgb}{0.2,0.5,0.8}
+\definecolor{warnred}{rgb}{0.8,0.2,0.2}
+
+% --- 代码高亮设置 (纯 ASCII，自动换行，彻底杜绝编译报错) ---
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 % 自动折行
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4,
+    frame=single,
+    rulecolor=\color{codegray!30}
+}
+\lstset{style=mystyle}
+
+% --- 超链接设置 ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!80!black,
+    citecolor=blue!80!black,
+    urlcolor=blue!80!black
+}
+
+% --- 文档信息 ---
+\title{\textbf{现代 Java 服务端深度重构与代码降噪工程指南}}
+\author{消除视觉密度 $\cdot$ 终结样板仪式 $\cdot$ 建立架构掌控感}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ==========================================
+\section{第一章：认知解毒——为什么老式 Java 让大脑极度痛苦？}
+% ==========================================
+
+许多初学者乃至有经验的工程师在编写 Java 代码时，常常伴随强烈的焦躁感与心理耗竭：满屏密密麻麻的字母、不断在十几个类之间穿梭跳转、无穷无尽的 \texttt{new} 与 \texttt{setter}。这种状态常被误认为是“注意力缺失（ADHD）”或“缺乏天赋”。
+
+\begin{tcolorbox}[colback=red!5!white,colframe=warnred,title=\textbf{核心心理认知真相}]
+\textbf{你感到痛苦，不是因为你缺乏天赋，而是因为老式 Java 的“低信噪比官僚仪式”在生理上抗拒人类大脑的认知规律！}
+\end{tcolorbox}
+
+\subsection{1.1 认知过载的三大罪魁祸首}
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{样板代码轰炸（Boilerplate Noise）}：
+    为了在两个对象之间传递 5 个字段，传统做法需要书写 10 行极其机械的 \texttt{dto.setXxx(entity.getXxx())}。这些代码没有任何商业决策价值，却占满了整个屏幕，迫使大脑花费大量认知带宽去肉眼扫描“是否少漏了一个字段”。
+    \item \textbf{过度层级跳转（Cognitive Friction）}：
+    一个简单的读取操作，强行被拆解为 Controller $\to$ Service $\to$ Repository $\to$ DTO $\to$ Entity。当每一层都在进行机械的“拆包再打包”时，人类的工作记忆（Working Memory）会在反复的文件切换中被迅速抽干。
+    \item \textbf{无意义的中间变量（Intermediate Clutter）}：
+    满地声明只使用了一次的临时变量，例如先定义 \texttt{String url}，再定义 \texttt{User user}，再定义 \texttt{Dto dto}，使得代码的执行密度极其松散，无法一眼看穿业务的核心输入输出。
+\end{enumerate}
+
+\subsection{1.2 极简重构的核心哲学}
+现代工程重构的终极目标，是让代码呈现出\textbf{“高信噪比”}与\textbf{“呼吸感”}：
+\begin{itemize}
+    \item \textbf{消除多余包装}：下游只需要一个字符串，就坚决不传递整个假实体；
+    \item \textbf{收敛组装权限}：对象的映射与校验应当归属于自身，坚决不让上层业务代码沦为“流水线搬运工”；
+    \item \textbf{利用框架契约}：凡是底层框架已经默认支持的物理机制（如 JSON 序列化、流式响应），坚决不再手写冗余封装。
+\end{itemize}
+
+---
+
+% ==========================================
+\section{第二部分：四大重灾区手术式重构（Before vs. After）}
+% ==========================================
+
+以短链工程中的四个核心类为标靶，我们逐一进行显微镜级别的重构对比。
+
+\subsection{2.1 重灾区一：跳转控制器（RedirectController）的流式瘦身}
+
+\subsubsection{Before（原始冗长写法：10行）}
+\begin{lstlisting}[language=Java]
+@GetMapping("/{shortUrl}")
+public ResponseEntity<Void> redirect(@PathVariable String shortUrl) {
+    UrlMapping urlMapping = urlMappingService.getOriginalUrl(shortUrl);
+    if (urlMapping != null) {
+        HttpHeaders httpHeaders = new HttpHeaders();
+        httpHeaders.add("Location", urlMapping.getOriginalUrl());
+        return ResponseEntity.status(302).headers(httpHeaders).build();
+    } else {
+        return ResponseEntity.notFound().build();
+    }
+}
+\end{lstlisting}
+\textbf{病症分析}：
+1. 仅仅为了跳转，被迫手动实例化 \texttt{HttpHeaders}，手动调用 \texttt{add()}，层级极度繁琐；
+2. 服务层返回了一个庞大的假实体 \texttt{UrlMapping}，而控制器实际上只需要一个重定向地址。
+
+\subsubsection{After（极简流式写法：3行）}
+\begin{lstlisting}[language=Java]
+@GetMapping("/{shortUrl}")
+public ResponseEntity<Void> redirect(@PathVariable String shortUrl) {
+    String targetUrl = urlMappingService.getOriginalUrl(shortUrl);
+    return targetUrl != null
+            ? ResponseEntity.status(302).location(URI.create(targetUrl)).build()
+            : ResponseEntity.notFound().build();
+}
+\end{lstlisting}
+\textbf{优化收益}：
+利用 Spring 原生支持的 \texttt{.location(URI)} 链式调用，搭配三元表达式，将冗长的分支结构收敛为一目了然的确定性流转。
+
+---
+
+\subsection{2.2 重灾区二：服务层跳转（UrlMappingService）的替身实体剔除}
+
+\subsubsection{Before（原始冗长写法）}
+当短链在 Redis 缓存命中时，为了匹配原本的方法签名，代码被迫在内存中凭空伪造一个假实体：
+\begin{lstlisting}[language=Java]
+String cachedUrl = redisTemplate.opsForValue().get("short:" + shortUrl);
+if (cachedUrl != null) {
+    redisTemplate.opsForValue().increment("clicks:" + shortUrl);
+    UrlMapping dummy = new UrlMapping();
+    dummy.setOriginalUrl(cachedUrl);
+    dummy.setShortUrl(shortUrl);
+    return dummy; // 内存捏造假对象交差
+}
+\end{lstlisting}
+
+\subsubsection{After（类型降维：精准返回 String）}
+\begin{lstlisting}[language=Java]
+public String getOriginalUrl(String shortUrl) {
+    // 1. 布隆过滤器第一道防线
+    if (!shortUrlBloomFilter.mightContain(shortUrl)) {
+        return null;
+    }
+
+    // 2. 查 Redis 缓存
+    String cachedUrl = redisTemplate.opsForValue().get("short:" + shortUrl);
+    if (cachedUrl != null) {
+        redisTemplate.opsForValue().increment("clicks:" + shortUrl);
+        return cachedUrl; // 直接返回长链接字符串！
+    }
+
+    // 3. 查数据库并回写
+    UrlMapping mapping = urlMappingRepository.findByShortUrl(shortUrl);
+    if (mapping != null) {
+        redisTemplate.opsForValue().set("short:" + shortUrl, mapping.getOriginalUrl(), 7, TimeUnit.DAYS);
+        redisTemplate.opsForValue().increment("clicks:" + shortUrl);
+        return mapping.getOriginalUrl();
+    }
+    return null;
+}
+\end{lstlisting}
+\textbf{优化收益}：
+将返回值从 \texttt{UrlMapping} 降维为纯粹的 \texttt{String}。消除了 6 行无意义的对象创建，同时向调用方明示契约：该方法的核心职责就是“通过短码解析出目标网址”。
+
+---
+
+\subsection{2.3 重灾区三：生成控制器（UrlMappingController）的伪包装消除}
+
+\subsubsection{Before（多层冗余包裹：9行）}
+\begin{lstlisting}[language=Java]
+@PostMapping("/shorten")
+@PreAuthorize("hasRole('USER')")
+public ResponseEntity<UrlMappingDTO> createShortUrl(@RequestBody Map<String, String> request, Principal principal) {
+    String originalUrl = request.get("originalUrl");
+    User user = userService.findByUsername(principal.getName());
+    UrlMappingDTO urlMappingDTO = urlMappingService.createShortUrl(originalUrl, user);
+    return ResponseEntity.ok(urlMappingDTO);
+}
+\end{lstlisting}
+
+\subsubsection{After（契约自闭环：4行）}
+\begin{lstlisting}[language=Java]
+@PostMapping("/shorten")
+@PreAuthorize("hasRole('USER')")
+public UrlMappingDTO createShortUrl(@RequestBody Map<String, String> request, Principal principal) {
+    User user = userService.findByUsername(principal.getName());
+    return urlMappingService.createShortUrl(request.get("originalUrl"), user);
+}
+\end{lstlisting}
+\textbf{优化收益}：
+在 Spring Boot 的 \texttt{@RestController} 体系中，方法直接返回业务对象时，底层消息转换器（HttpMessageConverter）会自动将其序列化为 HTTP 200 JSON 报文。显式套用 \texttt{ResponseEntity.ok()} 属于非必要的视觉噪音。
+
+---
+
+\subsection{2.4 重灾区四：DTO 转换中的“连续 setter 苦役”}
+
+\subsubsection{Before（漫长的搬砖方法）}
+\begin{lstlisting}[language=Java]
+private UrlMappingDTO convertToDto(UrlMapping urlMapping) {
+    UrlMappingDTO dto = new UrlMappingDTO();
+    dto.setId(urlMapping.getId());
+    dto.setOriginalUrl(urlMapping.getOriginalUrl());
+    dto.setShortUrl(urlMapping.getShortUrl());
+    dto.setClickCount(urlMapping.getClickCount());
+    dto.setCreatedDate(urlMapping.getCreatedDate());
+    if (urlMapping.getUser() != null) {
+        dto.setUsername(urlMapping.getUser().getUsername());
+    }
+    return dto;
+}
+\end{lstlisting}
+
+\subsubsection{After（静态工厂模式赋能）}
+将转换职责归还给 DTO 自身，利用 Lombok \texttt{@Builder} 实现单表达式构造：
+\begin{lstlisting}[language=Java]
+public static UrlMappingDTO from(UrlMapping entity) {
+    if (entity == null) return null;
+    return UrlMappingDTO.builder()
+            .id(entity.getId())
+            .originalUrl(entity.getOriginalUrl())
+            .shortUrl(entity.getShortUrl())
+            .clickCount(entity.getClickCount())
+            .createdDate(entity.getCreatedDate())
+            .username(entity.getUser() != null ? entity.getUser().getUsername() : null)
+            .build();
+}
+\end{lstlisting}
+Service 中的调用简化为极致的一句：
+\begin{lstlisting}[language=Java]
+return UrlMappingDTO.from(mapping);
+\end{lstlisting}
+
+---
+
+% ==========================================
+\section{第三章：现代 Java 降噪武器库}
+% ==========================================
+
+\begin{table}[htbp]
+\centering
+\begin{tabularx}{\textwidth}{@{}l X X@{}}
+\toprule
+\textbf{设计工具} & \textbf{消灭的具体痛点} & \textbf{经典落地范式} \\ \midrule
+\textbf{建造者模式 (@Builder)} & 消灭参数过多时的构造器爆炸，消灭大段连续的 \texttt{.set()} 语句 & \lstinline|User.builder().username("...").build()| \\
+\textbf{静态工厂方法 (Static Factory)} & 消除业务类中散落的对象拼装细节，消除紧密耦合 & \lstinline|UrlMappingDTO.from(entity)| \\
+\textbf{全参构造流式注入} & 消除 Stream 转换过程中匿名函数内部的多行拼装 & \lstinline|.map(e -> new ClickEventDTO(e.getKey(), e.getValue()))| \\
+\textbf{三元流式断言} & 消除深层嵌套的 \texttt{if-else} 结构 & \lstinline|return res != null ? ok(res) : notFound()| \\ \bottomrule
+\end{tabularx}
+\end{table}
+
+---
+
+% ==========================================
+\section{第四章：重构后短链核心服务全景代码范本}
+% ==========================================
+
+以下为消除所有冗余样板后，具有高度工业级工程审美的 \texttt{UrlMappingService.java} 完整形态：
+
+\begin{lstlisting}[language=Java]
+package com.url.shortener.service;
+
+import com.url.shortener.dtos.UrlMappingDTO;
+import com.url.shortener.models.UrlMapping;
+import com.url.shortener.models.User;
+import com.url.shortener.repository.UrlMappingRepository;
+import com.url.shortener.utils.Base62Util;
+import com.url.shortener.utils.ShortUrlBloomFilter;
+import lombok.AllArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+@Service
+@AllArgsConstructor
+public class UrlMappingService {
+
+    private final UrlMappingRepository urlMappingRepository;
+    private final StringRedisTemplate redisTemplate;
+    private final ShortUrlBloomFilter shortUrlBloomFilter;
+
+    /**
+     * 创建短链业务逻辑
+     */
+    public UrlMappingDTO createShortUrl(String originalUrl, User user) {
+        // 1. 建造者模式初始化临时实体并入库发号
+        UrlMapping mapping = urlMappingRepository.save(
+            UrlMapping.builder()
+                .originalUrl(originalUrl)
+                .shortUrl(UUID.randomUUID().toString().substring(0, 8))
+                .user(user)
+                .build()
+        );
+
+        // 2. Base62 算法计算短码并更新数据库
+        String shortCode = Base62Util.encode(mapping.getId());
+        mapping.setShortUrl(shortCode);
+        urlMappingRepository.save(mapping);
+
+        // 3. 登记布隆过滤器与 Redis 缓存预热
+        shortUrlBloomFilter.add(shortCode);
+        redisTemplate.opsForValue().set("short:" + shortCode, originalUrl, 7, TimeUnit.DAYS);
+
+        // 4. 静态工厂直接组装 DTO
+        return UrlMappingDTO.from(mapping);
+    }
+
+    /**
+     * 高性能跳转链路解析
+     */
+    public String getOriginalUrl(String shortUrl) {
+        // 第一道防线：布隆过滤器拦截非法恶意请求
+        if (!shortUrlBloomFilter.mightContain(shortUrl)) {
+            return null;
+        }
+
+        // 第二道防线：Redis 内存缓存命中与原子计数
+        String cachedUrl = redisTemplate.opsForValue().get("short:" + shortUrl);
+        if (cachedUrl != null) {
+            redisTemplate.opsForValue().increment("clicks:" + shortUrl);
+            return cachedUrl;
+        }
+
+        // 第三道防线：穿透查询数据库并回写缓存
+        UrlMapping mapping = urlMappingRepository.findByShortUrl(shortUrl);
+        if (mapping != null) {
+            redisTemplate.opsForValue().set("short:" + shortUrl, mapping.getOriginalUrl(), 7, TimeUnit.DAYS);
+            redisTemplate.opsForValue().increment("clicks:" + shortUrl);
+            return mapping.getOriginalUrl();
+        }
+        return null;
+    }
+}
+\end{lstlisting}
+
+---
+
+% ==========================================
+\section{第五章：工程师代码自我审查清单（5 个降噪准则）}
+% ==========================================
+
+在未来编写任何服务端代码时，可在提交 Git 前对照以下 5 条清单快速自审：
+
+\begin{tcolorbox}[colback=green!5!white,colframe=green!60!black,title=\textbf{代码洁癖审查清单}]
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{单次临时变量审查}：这个局部变量是否只被读取了一次？如果是，能否直接内联（Inline）进调用链？
+    \item \textbf{返回值纯度审查}：下游仅仅需要一个 ID 或 URL，我是否大费周章传递了整个包含十几个字段的 Entity？
+    \item \textbf{连续 Setter 审查}：屏幕上是否出现了连续 3 行以上的 \texttt{.setXxx()}？如果是，立刻引入 \texttt{@Builder} 或构造函数替代。
+    \item \textbf{框架默认行为审查}：控制器是否包裹了无意义的 \texttt{ResponseEntity.ok()}？能否信任 \texttt{@RestController} 的原生序列化？
+    \item \textbf{控制流分支审查}：简单的空值判断与默认返回，是否能用三元表达式或 \texttt{Optional} 压缩至 3 行以内？
+\end{enumerate}
+\end{tcolorbox}
+
+\textbf{结语}：好代码不是写出来的，而是删出来的。当你学会把所有繁文缛节剥去、只留下纯粹的数据与业务流转时，你会发现编程从一种心理折磨，真正转变为一种充满掌控感与秩序感的艺术。
+
+\end{document}

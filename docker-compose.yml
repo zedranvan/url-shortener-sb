@@ -1,0 +1,38 @@
+# ============================================================
+# 短链系统 本地开发环境
+#
+# 说明：
+#   - 只起 Postgres（Redis / Kafka 复用本机已运行实例）
+#   - 端口用 5433，避免与 mall-pro 的 5432 冲突
+#   - 线上用 Supabase Postgres，方言一致，切换零改动
+#
+# 用法：
+#   docker compose up -d          启动
+#   docker compose down           停止
+#   docker compose down -v        停止并清空数据
+# ============================================================
+
+services:
+  postgres:
+    image: postgres:alpine
+    container_name: shortener-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: url_shortener_db
+      POSTGRES_USER: shortener
+      POSTGRES_PASSWORD: shortener_password
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "5433:5432"
+    volumes:
+      # Postgres 18+ 要求挂载到 /var/lib/postgresql（数据放其子目录）
+      - shortener-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shortener -d url_shortener_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  shortener-pgdata:

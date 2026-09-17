@@ -7,12 +7,12 @@ import com.url.shortener.service.ShortUrlService;
 import com.url.shortener.service.UrlAnalyticsService;
 import com.url.shortener.service.UserService;
 import lombok.AllArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -42,14 +42,12 @@ public class UrlMappingController {
     @GetMapping("/analytics/{shortUrl}")
     @PreAuthorize("hasRole('USER')")
     public List<ClickEventDTO> getUrlAnalytics(@PathVariable String shortUrl,
-                                               @RequestParam("startDate") String startDate,
-                                               @RequestParam("endDate") String endDate) {
+                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
 
 
-        DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate,formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate,formatter);
-        return urlAnalyticsService.getClickEventsByDate(shortUrl,startDateTime,endDateTime);
+        return urlAnalyticsService.getClickEventsByDate(shortUrl, startDate, endDate);
+
     }
 
 }
